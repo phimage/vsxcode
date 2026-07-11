@@ -129,16 +129,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await vscode.window.showTextDocument(vscode.Uri.file(node.resolvedPath), { preview: true });
     }),
 
-    vscode.commands.registerCommand("pbx.revealInOS", async (node?: FileTreeNode | GroupTreeNode) => {
-      if (!node) {
-        return;
+    ...["pbx.revealInOS", "pbx.revealInOSWindows", "pbx.revealInOSLinux"].map((command) =>
+      vscode.commands.registerCommand(command, async (node?: FileTreeNode | GroupTreeNode) => {
+        if (!node) {
+          return;
+        }
+        const resolved =
+          node.kind === "file" ? node.resolvedPath : node.project.resolver.resolve(node.uuid);
+        if (resolved) {
+          await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(resolved));
+        }
+      })
+    ),
+
+    vscode.commands.registerCommand(
+      "pbx.revealInExplorer",
+      async (node?: FileTreeNode | GroupTreeNode) => {
+        if (!node) {
+          return;
+        }
+        const resolved =
+          node.kind === "file" ? node.resolvedPath : node.project.resolver.resolve(node.uuid);
+        if (resolved) {
+          await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(resolved));
+        }
       }
-      const resolved =
-        node.kind === "file" ? node.resolvedPath : node.project.resolver.resolve(node.uuid);
-      if (resolved) {
-        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(resolved));
-      }
-    }),
+    ),
 
     vscode.commands.registerCommand("pbx.openProjectFile", async (node?: ProjectTreeNode) => {
       if (node?.project) {

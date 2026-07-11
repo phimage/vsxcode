@@ -18,7 +18,7 @@ Inspect, browse and validate Xcode `.pbxproj` projects directly inside VS Code �
 - **Open files** straight from the tree; **Reveal in File Explorer/Finder** for files and groups.
 - **File operations** — create groups, add existing files, create new files (with target membership), rename, and remove (reference only or move-to-trash) — all writing clean, Xcode-style pbxproj.
 - **Drag & drop** — reorder/reparent references inside the tree (move), or drop files from the Explorer / desktop to add references.
-- **Linter + diagnostics** surfaced in the Problems panel, with red tree decorations for files that are referenced by the project but missing on disk.
+- **Linter + diagnostics** surfaced in the Problems panel, with orange warning tree decorations for files that are referenced by the project but missing on disk.
 
 ## Screenshots
 
@@ -51,7 +51,8 @@ Launch the extension (see [Development](#development)) against the bundled `test
 | `PBX: Refresh` | Re-scan the workspace, re-parse and re-lint. |
 | `PBX: Validate Project` | Run the linter and report a summary. |
 | `PBX: Open` | Open the selected file reference. |
-| `PBX: Reveal in File Explorer` | Reveal the file/group on disk. |
+| `PBX: Reveal in File Explorer` | Reveal the file/group on disk (OS Finder/File Explorer). |
+| `PBX: Reveal in Explorer View` | Reveal the file/group in VS Code's built-in Explorer view. |
 | `PBX: Open project.pbxproj` | Open the raw project file. |
 | `PBX: New Group` | Create a virtual group under the selection. |
 | `PBX: New File…` | Create a file on disk and reference it (with target membership). |

@@ -106,8 +106,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
     const obj = project.model.get(uuid);
     const label = obj?.displayName() ?? uuid;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
-    item.contextValue = "pbxGroup";
     const resolved = project.resolver.resolve(uuid);
+    item.contextValue = resolved ? "pbxGroup" : "pbxGroupVirtual";
     if (obj?.isa === "PBXFileSystemSynchronizedRootGroup") {
       item.iconPath = new vscode.ThemeIcon("file-directory");
       item.description = "synchronized";
@@ -131,7 +131,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
       item.tooltip = node.resolvedPath;
     }
     if (!node.exists && node.resolvedPath) {
-      item.iconPath = new vscode.ThemeIcon("error", new vscode.ThemeColor("list.errorForeground"));
+      item.iconPath = new vscode.ThemeIcon("warning", new vscode.ThemeColor("list.warningForeground"));
       item.description = "missing";
     }
     if (node.resolvedPath && node.exists) {

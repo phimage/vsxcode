@@ -171,7 +171,22 @@
       },
       {
         "command": "pbx.revealInOS",
+        "title": "Reveal in Finder",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.revealInOSWindows",
         "title": "Reveal in File Explorer",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.revealInOSLinux",
+        "title": "Open Containing Folder",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.revealInExplorer",
+        "title": "Reveal in Explorer View",
         "category": "PBX"
       },
       {
@@ -236,13 +251,28 @@
         },
         {
           "command": "pbx.revealInOS",
-          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup/",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/ && isMac",
           "group": "navigation@2"
+        },
+        {
+          "command": "pbx.revealInOSWindows",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/ && isWindows",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pbx.revealInOSLinux",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/ && isLinux",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pbx.revealInExplorer",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/",
+          "group": "navigation@3"
         },
         {
           "command": "pbx.showInspector",
           "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup|pbxProject/",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "pbx.openProjectFile",

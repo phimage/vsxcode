@@ -2,8 +2,8 @@ import * as vscode from "vscode";
 
 /**
  * Decorates tree nodes (and file-explorer entries) for referenced files that are
- * missing on disk, with a red badge + tooltip. The set of missing URIs is
- * refreshed after each lint pass.
+ * missing on disk, with an orange/warning badge + tooltip. The set of missing
+ * URIs is refreshed after each lint pass.
  */
 export class PbxDecorationProvider implements vscode.FileDecorationProvider {
   private missing = new Set<string>();
@@ -30,7 +30,7 @@ export class PbxDecorationProvider implements vscode.FileDecorationProvider {
     if (this.missing.has(uri.toString())) {
       return {
         badge: "!",
-        color: new vscode.ThemeColor("list.errorForeground"),
+        color: new vscode.ThemeColor("list.warningForeground"),
         tooltip: "File is referenced by the project but missing on disk"
       };
     }
