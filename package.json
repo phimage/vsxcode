@@ -2,7 +2,7 @@
   "name": "vsxcode",
   "displayName": "Xcode Project Editor",
   "description": "Inspect, edit, validate and maintain Xcode .pbxproj projects on Windows, Linux and macOS.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vsxcode",
   "license": "MIT",
   "icon": "media/icon.png",
