@@ -1,0 +1,49 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+		B001 /* Project object */ = {
+			isa = PBXProject;
+			mainGroup = B002;
+			targets = (
+				B010 /* App */,
+			);
+		};
+		B002 = {
+			isa = PBXGroup;
+			children = (
+				B003 /* G1 */,
+				BADREF00000000000000DEAD /* ghost */,
+			);
+			sourceTree = "<group>";
+		};
+		B003 /* G1 */ = {
+			isa = PBXGroup;
+			children = (
+				B004 /* G2 */,
+			);
+			sourceTree = "<group>";
+		};
+		B004 /* G2 */ = {
+			isa = PBXGroup;
+			children = (
+				B003 /* G1 */,
+			);
+			sourceTree = "<group>";
+		};
+		B005 /* Dup.swift */ = {isa = PBXFileReference; path = Dup.swift; sourceTree = "<group>"; };
+		B005 /* Dup.swift */ = {isa = PBXFileReference; path = Dup.swift; sourceTree = "<group>"; };
+		B006 /* Build */ = {isa = PBXBuildFile; fileRef = CAFEBABE0000000000000000 /* gone */; };
+		B010 /* App */ = {
+			isa = PBXNativeTarget;
+			buildPhases = (
+			);
+			name = App;
+			productName = App;
+		};
+	};
+	rootObject = B001 /* Project object */;
+}

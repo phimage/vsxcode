@@ -1,0 +1,89 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Xcode Project",
+  "scopeName": "source.pbxproj",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#section-marker" },
+    { "include": "#uuid" },
+    { "include": "#keywords" },
+    { "include": "#numbers" },
+    { "include": "#strings" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.banner.pbxproj",
+          "match": "^//\\s*!\\$\\*.*\\*\\$!.*$"
+        },
+        {
+          "name": "comment.line.double-slash.pbxproj",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.pbxproj",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "section-marker": {
+      "name": "comment.block.section.pbxproj",
+      "match": "/\\*\\s*(Begin|End)\\s+(\\w+)\\s+section\\s*\\*/",
+      "captures": {
+        "1": { "name": "keyword.control.section.pbxproj" },
+        "2": { "name": "entity.name.section.pbxproj" }
+      }
+    },
+    "uuid": {
+      "name": "constant.other.uuid.pbxproj",
+      "match": "\\b[0-9A-F]{24}\\b"
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.other.isa.pbxproj",
+          "match": "\\bisa\\b"
+        },
+        {
+          "name": "support.type.pbx.pbxproj",
+          "match": "\\b(PBX\\w+|XC\\w+)\\b"
+        },
+        {
+          "name": "support.constant.sourcetree.pbxproj",
+          "match": "\\b(SOURCE_ROOT|BUILT_PRODUCTS_DIR|DEVELOPER_DIR|SDKROOT|SYSTEM_DEVELOPER_DIR)\\b"
+        },
+        {
+          "name": "variable.other.buildsetting.pbxproj",
+          "match": "\\b[A-Z][A-Z0-9_]{2,}\\b(?=\\s*=)"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.pbxproj",
+      "match": "\\b\\d+(?:\\.\\d+)?\\b"
+    },
+    "strings": {
+      "name": "string.quoted.double.pbxproj",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.pbxproj",
+          "match": "\\\\(?:[\"\\\\ntr]|U[0-9a-fA-F]{4})"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.definition.dictionary.pbxproj", "match": "[{}]" },
+        { "name": "punctuation.definition.array.pbxproj", "match": "[()]" },
+        { "name": "keyword.operator.assignment.pbxproj", "match": "=" },
+        { "name": "punctuation.terminator.statement.pbxproj", "match": ";" },
+        { "name": "punctuation.separator.array.pbxproj", "match": "," }
+      ]
+    }
+  }
+}

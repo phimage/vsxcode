@@ -1,0 +1,306 @@
+{
+  "name": "vsxcode",
+  "displayName": "Xcode Project Editor",
+  "description": "Inspect, edit, validate and maintain Xcode .pbxproj projects on Windows, Linux and macOS.",
+  "version": "0.1.0",
+  "publisher": "vsxcode",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/phimage/vsxcode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/phimage/vsxcode/issues"
+  },
+  "homepage": "https://github.com/phimage/vsxcode#readme",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Visualization"
+  ],
+  "keywords": [
+    "xcode",
+    "pbxproj",
+    "ios",
+    "macos",
+    "project"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:pbxproj",
+    "workspaceContains:**/*.xcodeproj/project.pbxproj"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "pbxproj",
+        "aliases": [
+          "Xcode Project",
+          "pbxproj"
+        ],
+        "extensions": [
+          ".pbxproj"
+        ],
+        "filenames": [
+          "project.pbxproj"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pbxproj",
+        "scopeName": "source.pbxproj",
+        "path": "./syntaxes/pbxproj.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Xcode Project Editor",
+      "properties": {
+        "xcodeProjectEditor.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/build/Debug/**",
+            "**/build/Release/**",
+            "**/DerivedData/**"
+          ],
+          "markdownDescription": "Glob patterns for `project.pbxproj` files to exclude from the Project Navigator (and from linting/diagnostics). Patterns are matched against the full `…/*.xcodeproj/project.pbxproj` path. For example, `**/build/Debug/**` hides projects generated under `build/Debug`.",
+          "scope": "resource"
+        },
+        "xcodeProjectEditor.addFiles.showOptions": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the add-files options dialog (copy items, reference style, target membership) when adding files via *Add Files…* or drag & drop. When disabled, the `#xcodeProjectEditor.addFiles.copyIfNeeded#`, `#xcodeProjectEditor.addFiles.referenceStyle#` and `#xcodeProjectEditor.addFiles.addToTargets#` settings are applied silently."
+        },
+        "xcodeProjectEditor.addFiles.copyIfNeeded": {
+          "type": "boolean",
+          "default": false,
+          "description": "Copy files into the destination group's folder when they are located outside of it (Xcode's “Copy items if needed”)."
+        },
+        "xcodeProjectEditor.addFiles.referenceStyle": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "group",
+            "sourceRoot",
+            "absolute"
+          ],
+          "enumDescriptions": [
+            "Mimic the source-tree configuration of sibling files in the destination group (Xcode default).",
+            "Relative to the containing group (sourceTree = <group>).",
+            "Relative to the project root (sourceTree = SOURCE_ROOT).",
+            "Absolute path (sourceTree = <absolute>)."
+          ],
+          "default": "automatic",
+          "description": "How newly added file references locate their file."
+        },
+        "xcodeProjectEditor.addFiles.addToTargets": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "all",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Ask which targets to add the files to.",
+            "Add the files to all native targets.",
+            "Only add references; do not touch build phases."
+          ],
+          "default": "all",
+          "description": "Which targets newly added files are compiled/bundled with when the options dialog is not shown."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xcodeExplorer",
+          "title": "Xcode",
+          "icon": "media/hammer.svg"
+        }
+      ]
+    },
+    "views": {
+      "xcodeExplorer": [
+        {
+          "id": "xcodeProjectExplorer",
+          "name": "Project Navigator",
+          "icon": "media/xcode.svg",
+          "contextualTitle": "Xcode Project"
+        },
+        {
+          "id": "xcodePbxInspector",
+          "type": "webview",
+          "name": "Inspector",
+          "icon": "media/xcode.svg",
+          "contextualTitle": "Xcode Inspector"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "xcodeProjectExplorer",
+        "contents": "No Xcode project found in this workspace.\nOpen a folder that contains an .xcodeproj bundle to browse it here.\n[Refresh](command:pbx.refresh)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "pbx.refresh",
+        "title": "Refresh",
+        "category": "PBX",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pbx.validateProject",
+        "title": "Validate Project",
+        "category": "PBX",
+        "icon": "$(check)"
+      },
+      {
+        "command": "pbx.openFile",
+        "title": "Open",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.revealInOS",
+        "title": "Reveal in File Explorer",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.openProjectFile",
+        "title": "Open project.pbxproj",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.newGroup",
+        "title": "New Group",
+        "category": "PBX",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "pbx.newFile",
+        "title": "New File…",
+        "category": "PBX",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "pbx.addFiles",
+        "title": "Add Files…",
+        "category": "PBX",
+        "icon": "$(add)"
+      },
+      {
+        "command": "pbx.showInspector",
+        "title": "Show Inspector",
+        "category": "PBX",
+        "icon": "$(info)"
+      },
+      {
+        "command": "pbx.rename",
+        "title": "Rename…",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.remove",
+        "title": "Remove from Project…",
+        "category": "PBX",
+        "icon": "$(trash)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "pbx.refresh",
+          "when": "view == xcodeProjectExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pbx.validateProject",
+          "when": "view == xcodeProjectExplorer",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pbx.openFile",
+          "when": "view == xcodeProjectExplorer && viewItem == pbxFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pbx.revealInOS",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pbx.showInspector",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup|pbxProject/",
+          "group": "navigation@3"
+        },
+        {
+          "command": "pbx.openProjectFile",
+          "when": "view == xcodeProjectExplorer && viewItem == pbxProject",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pbx.newGroup",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxProject|pbxGroup/",
+          "group": "1_new@1"
+        },
+        {
+          "command": "pbx.newFile",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxProject|pbxGroup/",
+          "group": "1_new@2"
+        },
+        {
+          "command": "pbx.addFiles",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxProject|pbxGroup/",
+          "group": "1_new@3"
+        },
+        {
+          "command": "pbx.rename",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "pbx.remove",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "pbx.validateProject",
+          "when": "view == xcodeProjectExplorer && viewItem == pbxProject",
+          "group": "navigation@3"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile -- --production",
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package --no-dependencies -o vsxcode.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
