@@ -37,6 +37,11 @@ Launch the extension (see [Development](#development)) against the bundled `test
 
 - From source: see [Building](#building) / [Packaging](#packaging), then install the generated `.vsix` via **Extensions: Install from VSIX…**.
 
+### Recommended companion extensions
+
+- **File icon theme** — install a file-icon theme such as [Material Icon Theme](https://marketplace.visualstudio.com/items?itemName=PKief.material-icon-theme) so the Project Navigator shows recognizable icons per file type (see more [icon themes](https://marketplace.visualstudio.com/search?term=tag%3Aicon-theme&target=VSCode&category=All%20categories&sortBy=Relevance)).
+- **Asset catalogs** — install [Asset Catalog Viewer](https://marketplace.visualstudio.com/items?itemName=artemnovichkov.asset-catalog-viewer) to preview and edit `.xcassets` folders; this extension will offer to install it for you the first time you open one (see [Asset catalogs](#features)).
+
 ## Usage
 
 1. Open a folder that contains an `.xcodeproj` bundle.
