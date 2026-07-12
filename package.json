@@ -2,7 +2,7 @@
   "name": "vsxcode",
   "displayName": "Xcode Project Editor",
   "description": "Inspect, edit, validate and maintain Xcode .pbxproj projects on Windows, Linux and macOS.",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "publisher": "vsxcode",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -54,7 +54,8 @@
       {
         "id": "xml",
         "extensions": [
-          ".xcworkspacedata"
+          ".xcworkspacedata",
+          ".xcscheme"
         ]
       }
     ],
@@ -247,6 +248,11 @@
         "category": "PBX"
       },
       {
+        "command": "pbx.openSchemeFile",
+        "title": "Open .xcscheme",
+        "category": "PBX"
+      },
+      {
         "command": "pbx.wsNewGroup",
         "title": "New Group",
         "category": "PBX",
@@ -316,8 +322,13 @@
         },
         {
           "command": "pbx.showInspector",
-          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup|pbxProject|xcWorkspace|wsFileRef|wsGroup/",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup|pbxProject|pbxTarget|pbxPackage|xcWorkspace|xcScheme|wsFileRef|wsGroup/",
           "group": "navigation@4"
+        },
+        {
+          "command": "pbx.openSchemeFile",
+          "when": "view == xcodeProjectExplorer && viewItem == xcScheme",
+          "group": "navigation@1"
         },
         {
           "command": "pbx.openProjectFile",

@@ -1,9 +1,28 @@
 import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
+import {
+  buildPhasesOf,
+  packageReferences,
+  phaseFileRefs,
+  requirementSummary,
+  targetInfo
+} from "../model/queries";
 import { PbxObject } from "../model/types";
 import { XcWorkspaceItem, wsItemDisplayName } from "../xcworkspace/workspaceData";
 import { LoadedProject, LoadedWorkspace, ProjectManager } from "../workspace/discovery";
-import { FileTreeNode, GroupTreeNode, PbxTreeNode, WsFileRefTreeNode, WsGroupTreeNode } from "./nodes";
+import {
+  BuildPhaseTreeNode,
+  FileTreeNode,
+  GroupTreeNode,
+  PackageTreeNode,
+  PbxTreeNode,
+  SchemesSectionTreeNode,
+  SchemeTreeNode,
+  TargetTreeNode,
+  WsFileRefTreeNode,
+  WsGroupTreeNode
+} from "./nodes";
 
 export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode> {
   private readonly emitter = new vscode.EventEmitter<PbxTreeNode | undefined>();
@@ -29,6 +48,22 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
         return this.groupItem(node.project, node.uuid);
       case "file":
         return this.fileItem(node);
+      case "targetsSection":
+        return sectionItem("Targets", "target", node.project.model.targets().length);
+      case "target":
+        return this.targetItem(node);
+      case "buildPhase":
+        return this.buildPhaseItem(node);
+      case "packagesSection":
+        return sectionItem("Package Dependencies", "package", packageReferences(node.project.model).length);
+      case "package":
+        return this.packageItem(node);
+      case "schemesSection": {
+        const count = (node.project?.schemes ?? node.workspace?.schemes ?? []).length;
+        return sectionItem("Schemes", "play-circle", count);
+      }
+      case "scheme":
+        return this.schemeItem(node);
       case "message": {
         const item = new vscode.TreeItem(node.message);
         item.iconPath = new vscode.ThemeIcon("warning");
@@ -57,7 +92,11 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
         if (workspace.error) {
           return [{ kind: "message", message: workspace.error }];
         }
-        return this.wsChildNodes(workspace, workspace.data.items);
+        const nodes = this.wsChildNodes(workspace, workspace.data.items);
+        if (workspace.schemes.length > 0) {
+          nodes.push({ kind: "schemesSection", workspace } satisfies SchemesSectionTreeNode);
+        }
+        return nodes;
       }
       case "wsGroup": {
         const item = element.workspace.data.get(element.itemId);
@@ -69,11 +108,59 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
           return [{ kind: "message", message: project.error }];
         }
         const main = project.model.mainGroup();
-        return main ? this.childNodes(project, main) : [];
+        const nodes = main ? this.childNodes(project, main) : [];
+        // Xcode-like extras after the file hierarchy.
+        if (project.model.targets().length > 0) {
+          nodes.push({ kind: "targetsSection", project });
+        }
+        if (packageReferences(project.model).length > 0) {
+          nodes.push({ kind: "packagesSection", project });
+        }
+        if (project.schemes.length > 0) {
+          nodes.push({ kind: "schemesSection", project } satisfies SchemesSectionTreeNode);
+        }
+        return nodes;
       }
       case "group": {
         const obj = element.project.model.get(element.uuid);
         return obj ? this.childNodes(element.project, obj) : [];
+      }
+      case "targetsSection":
+        return element.project.model
+          .targets()
+          .map((t) => ({ kind: "target", project: element.project, uuid: t.uuid }) satisfies TargetTreeNode);
+      case "target":
+        return buildPhasesOf(element.project.model, element.uuid).map(
+          (phase) =>
+            ({ kind: "buildPhase", project: element.project, uuid: phase.uuid }) satisfies BuildPhaseTreeNode
+        );
+      case "buildPhase":
+        return phaseFileRefs(element.project.model, element.uuid).map((fileRef) => {
+          const resolvedPath = element.project.resolver.resolve(fileRef);
+          const exists = resolvedPath !== null ? fs.existsSync(resolvedPath) : true;
+          return {
+            kind: "file",
+            project: element.project,
+            uuid: fileRef,
+            resolvedPath,
+            exists
+          } satisfies FileTreeNode;
+        });
+      case "packagesSection":
+        return packageReferences(element.project.model).map(
+          (pkg) => ({ kind: "package", project: element.project, uuid: pkg.uuid }) satisfies PackageTreeNode
+        );
+      case "schemesSection": {
+        const schemes = element.project?.schemes ?? element.workspace?.schemes ?? [];
+        return schemes.map(
+          (scheme) =>
+            ({
+              kind: "scheme",
+              scheme,
+              project: element.project,
+              workspace: element.workspace
+            }) satisfies SchemeTreeNode
+        );
       }
       default:
         return [];
@@ -209,6 +296,69 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
     return item;
   }
 
+  private targetItem(node: TargetTreeNode): vscode.TreeItem {
+    const info = targetInfo(node.project.model, node.uuid);
+    const item = new vscode.TreeItem(info?.name ?? node.uuid, vscode.TreeItemCollapsibleState.Collapsed);
+    item.contextValue = "pbxTarget";
+    item.iconPath = new vscode.ThemeIcon(targetIcon(info?.productType));
+    // e.g. "com.apple.product-type.application" -> "application"
+    item.description = info?.productType?.split("product-type.").pop();
+    item.tooltip = info?.productType;
+    return item;
+  }
+
+  private buildPhaseItem(node: BuildPhaseTreeNode): vscode.TreeItem {
+    const phase = buildPhasesOf(node.project.model, node.uuid).find((p) => p.uuid === node.uuid);
+    const obj = node.project.model.get(node.uuid);
+    const name = obj?.getString("name") ?? obj?.annotation ?? phase?.name ?? node.uuid;
+    const fileCount = obj?.getStringArray("files").length ?? 0;
+    const item = new vscode.TreeItem(
+      name,
+      fileCount > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+    );
+    item.contextValue = "pbxBuildPhase";
+    item.iconPath = new vscode.ThemeIcon("list-ordered");
+    item.description = String(fileCount);
+    return item;
+  }
+
+  private packageItem(node: PackageTreeNode): vscode.TreeItem {
+    const pkg = packageReferences(node.project.model).find((p) => p.uuid === node.uuid);
+    const item = new vscode.TreeItem(pkg?.name ?? node.uuid, vscode.TreeItemCollapsibleState.None);
+    item.contextValue = "pbxPackage";
+    item.iconPath = new vscode.ThemeIcon("package");
+    if (pkg?.relativePath !== undefined) {
+      const resolved = path.resolve(node.project.projectRoot, pkg.relativePath);
+      item.description = pkg.relativePath;
+      item.tooltip = resolved;
+      if (!fs.existsSync(resolved)) {
+        item.iconPath = new vscode.ThemeIcon("warning", new vscode.ThemeColor("list.warningForeground"));
+        item.description = `${pkg.relativePath} — missing`;
+      }
+    } else {
+      item.description = requirementSummary(pkg?.requirement);
+      item.tooltip = pkg?.repositoryURL;
+    }
+    return item;
+  }
+
+  private schemeItem(node: SchemeTreeNode): vscode.TreeItem {
+    const item = new vscode.TreeItem(node.scheme.name, vscode.TreeItemCollapsibleState.None);
+    item.contextValue = "xcScheme";
+    item.iconPath = node.scheme.error
+      ? new vscode.ThemeIcon("warning", new vscode.ThemeColor("list.warningForeground"))
+      : new vscode.ThemeIcon("play");
+    item.description = node.scheme.error ? "error" : "shared";
+    item.resourceUri = node.scheme.uri;
+    item.tooltip = node.scheme.uri.fsPath;
+    item.command = {
+      command: "pbx.openSchemeFile",
+      title: "Open Scheme",
+      arguments: [node]
+    };
+    return item;
+  }
+
   private projectItem(project: LoadedProject, inWorkspace: boolean): vscode.TreeItem {
     const item = new vscode.TreeItem(
       project.name,
@@ -263,4 +413,33 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
     }
     return item;
   }
+}
+
+/** Virtual section header ("Targets", "Package Dependencies", "Schemes"). */
+function sectionItem(label: string, icon: string, count: number): vscode.TreeItem {
+  const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
+  item.contextValue = `pbxSection${label.replace(/\s/g, "")}`;
+  item.iconPath = new vscode.ThemeIcon(icon);
+  item.description = String(count);
+  return item;
+}
+
+/** Codicon for a target's product type. */
+function targetIcon(productType: string | undefined): string {
+  if (!productType) {
+    return "target";
+  }
+  if (productType.includes("test")) {
+    return "beaker";
+  }
+  if (productType.includes("application")) {
+    return "rocket";
+  }
+  if (productType.includes("framework") || productType.includes("library")) {
+    return "library";
+  }
+  if (productType.includes("extension")) {
+    return "extensions";
+  }
+  return "target";
 }

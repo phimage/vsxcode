@@ -1,8 +1,16 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import { EditDeps } from "../commands/edit";
 import { BuildConfigurationInfo, ProjectEditor, SOURCE_TREES } from "../edit/projectEditor";
+import {
+  PACKAGE_REQUIREMENT_KINDS,
+  packageProductUses,
+  packageReferences,
+  targetInfo
+} from "../model/queries";
+import { SCHEME_CONFIG_ACTIONS, XcScheme } from "../schemes/scheme";
 import { PbxTreeNode } from "../tree/nodes";
 import {
   splitLocation,
@@ -13,13 +21,24 @@ import {
 
 /** What the inspector is currently pointed at (survives tree refreshes). */
 interface InspectedNode {
-  /** `.pbxproj` URI for project nodes; `contents.xcworkspacedata` URI for workspace nodes. */
+  /** The document an edit writes to: `.pbxproj`, `contents.xcworkspacedata` or `.xcscheme`. */
   documentUri: vscode.Uri;
-  kind: "project" | "group" | "file" | "workspace" | "wsGroup" | "wsFileRef";
+  kind:
+    | "project"
+    | "group"
+    | "file"
+    | "workspace"
+    | "wsGroup"
+    | "wsFileRef"
+    | "target"
+    | "package"
+    | "scheme";
   /** pbx object uuid, or workspace item id. */
   uuid?: string;
   /** Directory containing the `.xcworkspace` bundle (workspace kinds only). */
   containerDir?: string;
+  /** Owning project's `.pbxproj` (scheme kind only, for configuration names). */
+  ownerProjectUri?: vscode.Uri;
 }
 
 type WebviewMessage =
@@ -33,7 +52,11 @@ type WebviewMessage =
   | { type: "setBuildSetting"; configUuid: string; key: string; value: string }
   | { type: "removeBuildSetting"; configUuid: string; key: string }
   | { type: "wsSetName"; value: string }
-  | { type: "wsSetLocation"; prefix: string; path: string };
+  | { type: "wsSetLocation"; prefix: string; path: string }
+  | { type: "setTargetName"; value: string }
+  | { type: "setPackageString"; key: "repositoryURL" | "relativePath"; value: string }
+  | { type: "setPackageRequirement"; kind: string; value: string; value2: string }
+  | { type: "schemeSetConfig"; action: string; value: string };
 
 /** Keys editable as plain strings directly on the PBXProject object. */
 const PROJECT_STRING_KEYS = new Set(["developmentRegion", "compatibilityVersion", "projectDirPath"]);
@@ -65,8 +88,27 @@ export class PbxInspectorViewProvider implements vscode.WebviewViewProvider {
 
   /** Points the inspector at a tree node (or clears it). */
   setNode(node: PbxTreeNode | undefined): void {
-    if (!node || node.kind === "message") {
+    if (
+      !node ||
+      node.kind === "message" ||
+      node.kind === "targetsSection" ||
+      node.kind === "packagesSection" ||
+      node.kind === "schemesSection" ||
+      node.kind === "buildPhase"
+    ) {
       this.current = undefined;
+    } else if (node.kind === "target" || node.kind === "package") {
+      this.current = {
+        documentUri: node.project.pbxprojUri,
+        kind: node.kind,
+        uuid: node.uuid
+      };
+    } else if (node.kind === "scheme") {
+      this.current = {
+        documentUri: node.scheme.uri,
+        kind: "scheme",
+        ownerProjectUri: node.project?.pbxprojUri
+      };
     } else if (node.kind === "workspace" || node.kind === "wsGroup" || node.kind === "wsFileRef") {
       this.current = {
         documentUri: node.workspace.dataUri,
@@ -96,6 +138,10 @@ export class PbxInspectorViewProvider implements vscode.WebviewViewProvider {
     }
     if (current.kind === "workspace" || current.kind === "wsGroup" || current.kind === "wsFileRef") {
       await this.handleWorkspaceMessage(current, msg);
+      return;
+    }
+    if (current.kind === "scheme") {
+      await this.handleSchemeMessage(current, msg);
       return;
     }
     try {
@@ -144,6 +190,18 @@ export class PbxInspectorViewProvider implements vscode.WebviewViewProvider {
         case "removeBuildSetting":
           changed = editor.setBuildSetting(msg.configUuid, msg.key, null);
           break;
+        case "setTargetName":
+          changed = current.uuid ? editor.setTargetName(current.uuid, msg.value) : false;
+          break;
+        case "setPackageString":
+          changed = current.uuid ? editor.setPackageString(current.uuid, msg.key, msg.value) : false;
+          break;
+        case "setPackageRequirement":
+          changed =
+            current.uuid && msg.value.trim() !== ""
+              ? editor.setPackageRequirement(current.uuid, msg.kind, msg.value.trim(), msg.value2.trim() || undefined)
+              : false;
+          break;
       }
       if (changed) {
         await this.deps.saveText(current.documentUri, editor.serialize());
@@ -172,6 +230,24 @@ export class PbxInspectorViewProvider implements vscode.WebviewViewProvider {
       }
       if (changed) {
         await this.deps.saveText(current.documentUri, data.serialize());
+        await this.deps.refresh();
+      }
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Inspector edit failed: ${(err as Error).message}`);
+    }
+    this.render();
+  }
+
+  /** Applies an edit to an `.xcscheme` document. */
+  private async handleSchemeMessage(current: InspectedNode, msg: WebviewMessage): Promise<void> {
+    try {
+      const scheme = XcScheme.parse(fs.readFileSync(current.documentUri.fsPath, "utf8"));
+      let changed = false;
+      if (msg.type === "schemeSetConfig") {
+        changed = scheme.setActionConfiguration(msg.action, msg.value);
+      }
+      if (changed) {
+        await this.deps.saveText(current.documentUri, scheme.serialize());
         await this.deps.refresh();
       }
     } catch (err) {
@@ -274,6 +350,18 @@ ${body}
         if (prefix && path) { post({ type: "wsSetLocation", prefix: prefix.value, path: path.value }); }
         break;
       }
+      case "setTargetName": post({ type: "setTargetName", value: el.value }); break;
+      case "setPackageString": post({ type: "setPackageString", key: d.key, value: el.value }); break;
+      case "setPackageRequirement": {
+        const kind = document.getElementById("pkgKind");
+        const value = document.getElementById("pkgValue");
+        const value2 = document.getElementById("pkgValue2");
+        if (kind && value) {
+          post({ type: "setPackageRequirement", kind: kind.value, value: value.value, value2: value2 ? value2.value : "" });
+        }
+        break;
+      }
+      case "schemeSetConfig": post({ type: "schemeSetConfig", action: d.action, value: el.value }); break;
     }
   });
   document.addEventListener("click", (e) => {
@@ -309,9 +397,18 @@ ${body}
     ) {
       return this.renderWorkspaceNode(this.current);
     }
+    if (this.current.kind === "scheme") {
+      return this.renderScheme(this.current);
+    }
     const editor = ProjectEditor.load(this.current.documentUri.fsPath);
     if (this.current.kind === "project") {
       return { title: "Project", body: this.renderProject(editor) };
+    }
+    if (this.current.kind === "target") {
+      return this.renderTarget(editor, this.current.uuid);
+    }
+    if (this.current.kind === "package") {
+      return this.renderPackage(editor, this.current.uuid);
     }
     const uuid = this.current.uuid;
     const obj = uuid ? editor.model.get(uuid) : undefined;
@@ -444,6 +541,134 @@ ${attrRow("Class Prefix", "CLASSPREFIX")}
     return { title: name, body };
   }
 
+  /** Xcode-style target inspector: identity, dependencies, build settings. */
+  private renderTarget(editor: ProjectEditor, uuid: string | undefined): { title: string; body: string } {
+    const info = uuid ? targetInfo(editor.model, uuid) : undefined;
+    const target = uuid ? editor.model.get(uuid) : undefined;
+    if (!info || !target) {
+      return { title: "Target", body: `<p class="empty">The selected target no longer exists.</p>` };
+    }
+    let body = `
+<h3>Identity</h3>
+<div class="row"><label>Name</label><input type="text" data-msg="setTargetName" value="${esc(info.name)}"></div>
+<div class="row"><label>Type</label><input type="text" class="readonly" readonly value="${esc(info.isa)}"></div>`;
+    if (info.productType) {
+      body += `\n<div class="row"><label>Product Type</label><input type="text" class="readonly" readonly value="${esc(info.productType)}"></div>`;
+    }
+    if (info.productName) {
+      body += `\n<div class="row"><label>Product Name</label><input type="text" class="readonly" readonly value="${esc(info.productName)}"></div>`;
+    }
+    body += `\n<h3>Dependencies</h3>`;
+    if (info.dependencyNames.length === 0) {
+      body += `<p class="empty">No target dependencies.</p>`;
+    }
+    for (const dep of info.dependencyNames) {
+      body += `\n<div class="check"><span>${esc(dep)}</span></div>`;
+    }
+    body += `\n<h3>Build Configurations</h3>`;
+    const configs = editor.buildConfigurationsOf(target);
+    if (configs.length === 0) {
+      body += `<p class="empty">No build configurations found.</p>`;
+    }
+    for (const config of configs) {
+      body += this.renderConfiguration(config);
+    }
+    return { title: info.name, body };
+  }
+
+  /** Swift package dependency inspector (remote: URL + requirement; local: path). */
+  private renderPackage(editor: ProjectEditor, uuid: string | undefined): { title: string; body: string } {
+    const pkg = uuid ? packageReferences(editor.model).find((p) => p.uuid === uuid) : undefined;
+    if (!pkg || !uuid) {
+      return { title: "Package", body: `<p class="empty">The selected package no longer exists.</p>` };
+    }
+    let body = `\n<h3>Identity</h3>
+<div class="row"><label>Name</label><input type="text" class="readonly" readonly value="${esc(pkg.name)}"></div>`;
+
+    if (pkg.relativePath !== undefined) {
+      body += `
+<h3>Location</h3>
+<div class="row"><label>Path</label><input type="text" data-msg="setPackageString" data-key="relativePath" value="${esc(pkg.relativePath)}"></div>`;
+    } else {
+      const req = pkg.requirement;
+      const kinds: string[] = [...PACKAGE_REQUIREMENT_KINDS];
+      if (req && !kinds.includes(req.kind)) {
+        kinds.unshift(req.kind);
+      }
+      const kindOptions = kinds
+        .map((k) => `<option value="${esc(k)}"${k === req?.kind ? " selected" : ""}>${esc(requirementKindLabel(k))}</option>`)
+        .join("");
+      body += `
+<h3>Location</h3>
+<div class="row"><label>Repository</label><input type="text" data-msg="setPackageString" data-key="repositoryURL" value="${esc(pkg.repositoryURL ?? "")}"></div>
+<h3>Version Requirement</h3>
+<div class="row"><label>Rule</label><select id="pkgKind" data-msg="setPackageRequirement">${kindOptions}</select></div>
+<div class="row"><label>Value</label><input type="text" id="pkgValue" data-msg="setPackageRequirement" value="${esc(req?.value ?? "")}" placeholder="version / branch / revision"></div>
+<div class="row"><label>Up To</label><input type="text" id="pkgValue2" data-msg="setPackageRequirement" value="${esc(req?.value2 ?? "")}" placeholder="max version (range only)"></div>`;
+    }
+
+    const uses = packageProductUses(editor.model, uuid);
+    body += `\n<h3>Used By</h3>`;
+    if (uses.length === 0) {
+      body += `<p class="empty">No target uses products of this package.</p>`;
+    }
+    for (const use of uses) {
+      body += `\n<div class="check"><span>${esc(use.targetName)} — ${esc(use.productName)}</span></div>`;
+    }
+    return { title: pkg.name, body };
+  }
+
+  /** Scheme inspector: buildable targets + per-action build configuration. */
+  private renderScheme(current: InspectedNode): { title: string; body: string } {
+    const scheme = XcScheme.parse(fs.readFileSync(current.documentUri.fsPath, "utf8"));
+    const name = path.basename(current.documentUri.fsPath).replace(/\.xcscheme$/i, "");
+
+    // Configuration names from the owning project, for the selects.
+    let configNames: string[] = [];
+    if (current.ownerProjectUri) {
+      try {
+        const editor = ProjectEditor.load(current.ownerProjectUri.fsPath);
+        const project = editor.projectObject();
+        configNames = project ? editor.buildConfigurationsOf(project).map((c) => c.name) : [];
+      } catch {
+        configNames = [];
+      }
+    }
+
+    let body = `
+<h3>Scheme</h3>
+<div class="row"><label>Name</label><input type="text" class="readonly" readonly value="${esc(name)}"></div>
+<div class="row"><label>Version</label><input type="text" class="readonly" readonly value="${esc(scheme.version ?? "")}"></div>
+<h3>Build Targets</h3>`;
+    const refs = scheme.buildableReferences();
+    if (refs.length === 0) {
+      body += `<p class="empty">No buildable references.</p>`;
+    }
+    for (const ref of refs) {
+      body += `\n<div class="check"><span>${esc(ref.blueprintName)} — ${esc(ref.referencedContainer)}</span></div>`;
+    }
+
+    body += `\n<h3>Build Configuration per Action</h3>`;
+    const actions = new Map(scheme.actionConfigurations().map((a) => [a.action, a.buildConfiguration]));
+    for (const action of SCHEME_CONFIG_ACTIONS) {
+      const value = actions.get(action);
+      if (value === undefined) {
+        continue;
+      }
+      const label = action.replace(/Action$/, "");
+      if (configNames.length > 0) {
+        const names = configNames.includes(value) ? configNames : [value, ...configNames];
+        const options = names
+          .map((n) => `<option value="${esc(n)}"${n === value ? " selected" : ""}>${esc(n)}</option>`)
+          .join("");
+        body += `\n<div class="row"><label>${esc(label)}</label><select data-msg="schemeSetConfig" data-action="${esc(action)}">${options}</select></div>`;
+      } else {
+        body += `\n<div class="row"><label>${esc(label)}</label><input type="text" data-msg="schemeSetConfig" data-action="${esc(action)}" value="${esc(value)}"></div>`;
+      }
+    }
+    return { title: name, body };
+  }
+
   private renderConfiguration(config: BuildConfigurationInfo): string {
     let rows = "";
     for (const setting of config.settings) {
@@ -468,6 +693,25 @@ ${attrRow("Class Prefix", "CLASSPREFIX")}
   <button data-action="addSetting" data-config="${esc(config.uuid)}">Add</button>
 </div>
 </details>`;
+  }
+}
+
+function requirementKindLabel(kind: string): string {
+  switch (kind) {
+    case "upToNextMajorVersion":
+      return "Up to Next Major Version";
+    case "upToNextMinorVersion":
+      return "Up to Next Minor Version";
+    case "exactVersion":
+      return "Exact Version";
+    case "versionRange":
+      return "Version Range";
+    case "branch":
+      return "Branch";
+    case "revision":
+      return "Commit";
+    default:
+      return kind;
   }
 }
 

@@ -687,6 +687,85 @@ export class ProjectEditor {
     return true;
   }
 
+  // --- targets ----------------------------------------------------------------
+
+  /**
+   * Renames a target (and `productName` when it matched the old name). Stale
+   * `/* Name *\/` annotation comments elsewhere are preserved trivia — Xcode
+   * regenerates them on its next save; they have no semantic effect.
+   */
+  setTargetName(uuid: string, name: string): boolean {
+    const target = this.model.get(uuid);
+    const trimmed = name.trim();
+    if (!target || !target.isTarget() || trimmed === "" || trimmed === target.getString("name")) {
+      return false;
+    }
+    if (target.getString("productName") === target.getString("name")) {
+      setDictString(target.dict, "productName", trimmed);
+    }
+    setDictString(target.dict, "name", trimmed);
+    return true;
+  }
+
+  // --- Swift package references ------------------------------------------------
+
+  /** Rewrites a remote package's version requirement (kind + value keys). */
+  setPackageRequirement(uuid: string, kind: string, value: string, value2?: string): boolean {
+    const pkg = this.model.get(uuid);
+    if (!pkg || pkg.isa !== Isa.XCRemoteSwiftPackageReference) {
+      return false;
+    }
+    let entry = pkg.entry("requirement");
+    if (!entry) {
+      const indent = dictFieldIndent(pkg.dict, "\n\t\t\t");
+      const dict: DictNode = {
+        kind: "dict",
+        open: tok(TokenType.LBrace, "{", " "),
+        entries: [],
+        close: tok(TokenType.RBrace, "}", indent)
+      };
+      setDictValue(pkg.dict, "requirement", dict);
+      entry = pkg.entry("requirement");
+    }
+    if (!entry || entry.value.kind !== "dict") {
+      return false;
+    }
+    const dict = entry.value;
+    for (const key of ["minimumVersion", "maximumVersion", "version", "branch", "revision"]) {
+      removeDictEntry(dict, key);
+    }
+    setDictString(dict, "kind", kind);
+    switch (kind) {
+      case "versionRange":
+        setDictString(dict, "minimumVersion", value);
+        setDictString(dict, "maximumVersion", value2 ?? value);
+        break;
+      case "exactVersion":
+        setDictString(dict, "version", value);
+        break;
+      case "branch":
+        setDictString(dict, "branch", value);
+        break;
+      case "revision":
+        setDictString(dict, "revision", value);
+        break;
+      default:
+        setDictString(dict, "minimumVersion", value);
+        break;
+    }
+    return true;
+  }
+
+  /** Sets `repositoryURL` (remote) or `relativePath` (local) on a package ref. */
+  setPackageString(uuid: string, key: "repositoryURL" | "relativePath", value: string): boolean {
+    const pkg = this.model.get(uuid);
+    if (!pkg || value.trim() === "" || pkg.getString(key) === value.trim()) {
+      return false;
+    }
+    setDictString(pkg.dict, key, value.trim());
+    return true;
+  }
+
   private isDescendantOf(candidate: string, ancestor: string): boolean {
     let cur: string | undefined = candidate;
     const seen = new Set<string>();
@@ -700,3 +779,4 @@ export class ProjectEditor {
     return false;
   }
 }
+

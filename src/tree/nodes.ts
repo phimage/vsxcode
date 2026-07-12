@@ -1,4 +1,4 @@
-import { LoadedProject, LoadedWorkspace } from "../workspace/discovery";
+import { LoadedProject, LoadedScheme, LoadedWorkspace } from "../workspace/discovery";
 
 export interface ProjectTreeNode {
   kind: "project";
@@ -42,6 +42,51 @@ export interface WsFileRefTreeNode {
   exists: boolean;
 }
 
+/** Virtual "Targets" section under a project node. */
+export interface TargetsSectionTreeNode {
+  kind: "targetsSection";
+  project: LoadedProject;
+}
+
+export interface TargetTreeNode {
+  kind: "target";
+  project: LoadedProject;
+  uuid: string;
+}
+
+export interface BuildPhaseTreeNode {
+  kind: "buildPhase";
+  project: LoadedProject;
+  uuid: string;
+}
+
+/** Virtual "Package Dependencies" section under a project node. */
+export interface PackagesSectionTreeNode {
+  kind: "packagesSection";
+  project: LoadedProject;
+}
+
+export interface PackageTreeNode {
+  kind: "package";
+  project: LoadedProject;
+  uuid: string;
+}
+
+/** Virtual "Schemes" section under a project or workspace node. */
+export interface SchemesSectionTreeNode {
+  kind: "schemesSection";
+  project?: LoadedProject;
+  workspace?: LoadedWorkspace;
+}
+
+export interface SchemeTreeNode {
+  kind: "scheme";
+  scheme: LoadedScheme;
+  /** Owning project, when the scheme lives in an `.xcodeproj` bundle. */
+  project?: LoadedProject;
+  workspace?: LoadedWorkspace;
+}
+
 export interface MessageTreeNode {
   kind: "message";
   message: string;
@@ -54,6 +99,13 @@ export type PbxTreeNode =
   | WorkspaceTreeNode
   | WsGroupTreeNode
   | WsFileRefTreeNode
+  | TargetsSectionTreeNode
+  | TargetTreeNode
+  | BuildPhaseTreeNode
+  | PackagesSectionTreeNode
+  | PackageTreeNode
+  | SchemesSectionTreeNode
+  | SchemeTreeNode
   | MessageTreeNode;
 
 /** Nodes that belong to a `.pbxproj` document. */

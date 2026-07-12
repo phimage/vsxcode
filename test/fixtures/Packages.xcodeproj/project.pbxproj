@@ -1,0 +1,138 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2B000000000000000000000A /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = 2B0000000000000000000008 /* Yams */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2B0000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2B000000000000000000000A /* Yams in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2B0000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2B0000000000000000000004 /* PackagesApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2B000000000000000000000B /* Build configuration list for PBXNativeTarget "PackagesApp" */;
+			buildPhases = (
+				2B0000000000000000000005 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PackagesApp;
+			packageProductDependencies = (
+				2B0000000000000000000008 /* Yams */,
+			);
+			productName = PackagesApp;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2B0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 2B000000000000000000000C /* Build configuration list for PBXProject "Packages" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 2B0000000000000000000002;
+			packageReferences = (
+				2B0000000000000000000006 /* XCRemoteSwiftPackageReference "Yams" */,
+				2B0000000000000000000007 /* XCLocalSwiftPackageReference "../LocalKit" */,
+			);
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2B0000000000000000000004 /* PackagesApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		2B000000000000000000000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		2B000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2B000000000000000000000B /* Build configuration list for PBXNativeTarget "PackagesApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2B000000000000000000000D /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2B000000000000000000000C /* Build configuration list for PBXProject "Packages" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2B000000000000000000000E /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		2B0000000000000000000007 /* XCLocalSwiftPackageReference "../LocalKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../LocalKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		2B0000000000000000000006 /* XCRemoteSwiftPackageReference "Yams" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jpsim/Yams.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2B0000000000000000000008 /* Yams */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2B0000000000000000000006 /* XCRemoteSwiftPackageReference "Yams" */;
+			productName = Yams;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 2B0000000000000000000001 /* Project object */;
+}

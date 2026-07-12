@@ -14,6 +14,7 @@ import {
   GroupTreeNode,
   PbxTreeNode,
   ProjectTreeNode,
+  SchemeTreeNode,
   WsFileRefTreeNode,
   WsGroupTreeNode
 } from "./tree/nodes";
@@ -182,23 +183,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (node?.project) {
         await vscode.window.showTextDocument(node.project.pbxprojUri, { preview: true });
       }
+    }),
+
+    vscode.commands.registerCommand("pbx.openSchemeFile", async (node?: SchemeTreeNode) => {
+      if (node?.scheme) {
+        await vscode.window.showTextDocument(node.scheme.uri, { preview: true });
+      }
     })
   );
 
   // Re-parse + re-lint whenever a project/workspace file changes on disk or is saved.
   const watcher = vscode.workspace.createFileSystemWatcher("**/*.xcodeproj/project.pbxproj");
   const wsWatcher = vscode.workspace.createFileSystemWatcher("**/*.xcworkspace/contents.xcworkspacedata");
+  const schemeWatcher = vscode.workspace.createFileSystemWatcher("**/xcshareddata/xcschemes/*.xcscheme");
   context.subscriptions.push(
     watcher,
     wsWatcher,
+    schemeWatcher,
     watcher.onDidChange(() => void refreshAll()),
     watcher.onDidCreate(() => void refreshAll()),
     watcher.onDidDelete(() => void refreshAll()),
     wsWatcher.onDidChange(() => void refreshAll()),
     wsWatcher.onDidCreate(() => void refreshAll()),
     wsWatcher.onDidDelete(() => void refreshAll()),
+    schemeWatcher.onDidChange(() => void refreshAll()),
+    schemeWatcher.onDidCreate(() => void refreshAll()),
+    schemeWatcher.onDidDelete(() => void refreshAll()),
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.languageId === "pbxproj" || doc.fileName.endsWith(".xcworkspacedata")) {
+      if (
+        doc.languageId === "pbxproj" ||
+        doc.fileName.endsWith(".xcworkspacedata") ||
+        doc.fileName.endsWith(".xcscheme")
+      ) {
         void refreshAll();
       }
     }),

@@ -13,7 +13,10 @@ export const Isa = {
   PBXAggregateTarget: "PBXAggregateTarget",
   PBXLegacyTarget: "PBXLegacyTarget",
   XCConfigurationList: "XCConfigurationList",
-  XCBuildConfiguration: "XCBuildConfiguration"
+  XCBuildConfiguration: "XCBuildConfiguration",
+  XCRemoteSwiftPackageReference: "XCRemoteSwiftPackageReference",
+  XCLocalSwiftPackageReference: "XCLocalSwiftPackageReference",
+  XCSwiftPackageProductDependency: "XCSwiftPackageProductDependency"
 } as const;
 
 const GROUP_ISAS = new Set<string>([

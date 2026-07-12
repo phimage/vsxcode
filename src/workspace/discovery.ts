@@ -3,8 +3,19 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { PbxModel } from "../model/pbxProject";
 import { PathResolver } from "../model/pathResolver";
+import { XcScheme } from "../schemes/scheme";
 import { isInsideXcodeproj, XcWorkspaceData } from "../xcworkspace/workspaceData";
 import { combineExcludeGlobs, CONFIG_SECTION, DEFAULT_EXCLUDE, EXCLUDE_KEY } from "./exclude";
+
+/** A shared scheme (`xcshareddata/xcschemes/<Name>.xcscheme`) of a bundle. */
+export interface LoadedScheme {
+  readonly uri: vscode.Uri;
+  /** Display name, e.g. `MyApp` for `MyApp.xcscheme`. */
+  readonly name: string;
+  readonly scheme: XcScheme;
+  /** Non-fatal parse error, if the file could not be parsed. */
+  readonly error?: string;
+}
 
 /** A discovered, parsed Xcode project. */
 export interface LoadedProject {
@@ -17,6 +28,8 @@ export interface LoadedProject {
   readonly text: string;
   readonly model: PbxModel;
   readonly resolver: PathResolver;
+  /** Shared schemes inside the `.xcodeproj` bundle. */
+  readonly schemes: LoadedScheme[];
   /** Non-fatal parse error, if the file could not be parsed. */
   readonly error?: string;
 }
@@ -35,6 +48,8 @@ export interface LoadedWorkspace {
   readonly data: XcWorkspaceData;
   /** Absolute paths of every referenced `.xcodeproj` bundle. */
   readonly projectPaths: string[];
+  /** Shared schemes inside the `.xcworkspace` bundle. */
+  readonly schemes: LoadedScheme[];
   /** Non-fatal parse error, if the file could not be parsed. */
   readonly error?: string;
 }
@@ -70,11 +85,37 @@ export async function findXcodeWorkspaces(): Promise<vscode.Uri[]> {
     .sort((a, b) => a.fsPath.localeCompare(b.fsPath));
 }
 
+/** Loads the shared schemes of an `.xcodeproj` or `.xcworkspace` bundle. */
+function loadSchemes(bundlePath: string): LoadedScheme[] {
+  const schemesDir = path.join(bundlePath, "xcshareddata", "xcschemes");
+  let files: string[];
+  try {
+    files = fs.readdirSync(schemesDir).filter((f) => f.toLowerCase().endsWith(".xcscheme"));
+  } catch {
+    return []; // no shared schemes
+  }
+  return files.sort((a, b) => a.localeCompare(b)).map((file) => {
+    const uri = vscode.Uri.file(path.join(schemesDir, file));
+    const name = file.replace(/\.xcscheme$/i, "");
+    try {
+      return { uri, name, scheme: XcScheme.parse(fs.readFileSync(uri.fsPath, "utf8")) };
+    } catch (err) {
+      return {
+        uri,
+        name,
+        scheme: XcScheme.parse("<Scheme></Scheme>"),
+        error: `Cannot load scheme: ${(err as Error).message}`
+      };
+    }
+  });
+}
+
 function loadProject(pbxprojUri: vscode.Uri): LoadedProject {
   const pbxprojPath = pbxprojUri.fsPath;
   const xcodeprojDir = path.dirname(pbxprojPath); // .../MyApp.xcodeproj
   const projectRoot = path.dirname(xcodeprojDir); // .../ (contains the bundle)
   const name = path.basename(xcodeprojDir).replace(/\.xcodeproj$/i, "");
+  const schemes = loadSchemes(xcodeprojDir);
 
   let text = "";
   try {
@@ -89,6 +130,7 @@ function loadProject(pbxprojUri: vscode.Uri): LoadedProject {
       text,
       model,
       resolver: new PathResolver(model, projectRoot),
+      schemes,
       error: `Cannot read file: ${(err as Error).message}`
     };
   }
@@ -101,7 +143,8 @@ function loadProject(pbxprojUri: vscode.Uri): LoadedProject {
       projectRoot,
       text,
       model,
-      resolver: new PathResolver(model, projectRoot)
+      resolver: new PathResolver(model, projectRoot),
+      schemes
     };
   } catch (err) {
     const model = PbxModel.parse("{ }");
@@ -112,6 +155,7 @@ function loadProject(pbxprojUri: vscode.Uri): LoadedProject {
       text,
       model,
       resolver: new PathResolver(model, projectRoot),
+      schemes,
       error: `Parse error: ${(err as Error).message}`
     };
   }
@@ -141,7 +185,17 @@ function loadWorkspace(dataUri: vscode.Uri): LoadedWorkspace {
     }
   }
 
-  return { dataUri, name, bundlePath, containerDir, text, data, projectPaths, error };
+  return {
+    dataUri,
+    name,
+    bundlePath,
+    containerDir,
+    text,
+    data,
+    projectPaths,
+    schemes: loadSchemes(bundlePath),
+    error
+  };
 }
 
 /** Loads and caches all discovered projects and workspaces; reloads on demand. */
