@@ -15,6 +15,7 @@ Inspect, browse and validate Xcode `.pbxproj` projects directly inside VS Code �
 - **Syntax highlighting** for `.pbxproj` (UUIDs, comments, `isa` keywords, PBX/XC types, build settings, strings, sections) with bracket matching, section folding and a Document Symbols outline.
 - **Round-trip parser** — a custom CST-based OpenStep property-list parser that preserves whitespace, comments and object ordering exactly. Serializing an unmodified project reproduces the original file byte-for-byte.
 - **Project Navigator** — an Xcode-style tree in its own activity-bar view, discovered automatically from any `*.xcodeproj/project.pbxproj` in the workspace.
+- **Xcode workspaces** — `.xcworkspace` bundles become tree roots with their referenced projects nested inside (even projects outside the opened folder); browse, edit and inspect workspace groups and file references.
 - **Open files** straight from the tree; **Reveal in File Explorer/Finder** for files and groups.
 - **File operations** — create groups, add existing files, create new files (with target membership), rename, and remove (reference only or move-to-trash) — all writing clean, Xcode-style pbxproj.
 - **Drag & drop** — reorder/reparent references inside the tree (move), or drop files from the Explorer / desktop to add references.
@@ -42,7 +43,7 @@ Launch the extension (see [Development](#development)) against the bundled `test
 ## Supported project types
 
 - `project.pbxproj` (Xcode project files), including Xcode 16 `PBXFileSystemSynchronizedRootGroup` folders.
-- `.xcworkspace` support is planned (see [Roadmap](#roadmap)).
+- `.xcworkspace` bundles (`contents.xcworkspacedata`): round-trip parse/serialize in Xcode's XML formatting, tree browsing with nested projects, inspector editing of names and locations (`group:`, `container:`, `absolute:`…), add/remove references and groups. The implicit `project.xcworkspace` inside every `.xcodeproj` is ignored.
 
 ## Commands
 
@@ -59,6 +60,9 @@ Launch the extension (see [Development](#development)) against the bundled `test
 | `PBX: Add Files…` | Add existing file(s)/folder(s) as references. |
 | `PBX: Rename…` | Rename a group or file (renames on disk too). |
 | `PBX: Remove from Project…` | Remove a reference, optionally moving the file to Trash. |
+| `PBX: Open contents.xcworkspacedata` | Open the raw workspace file. |
+| `PBX: Add Files to Workspace…` | Add file/folder/project references to a workspace or workspace group. |
+| `PBX: Remove from Workspace…` | Remove a project, file reference or group from the workspace (files on disk untouched). |
 
 ## Tree views
 

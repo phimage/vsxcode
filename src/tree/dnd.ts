@@ -27,7 +27,7 @@ export class PbxDragAndDropController implements vscode.TreeDragAndDropControlle
 
   handleDrag(source: readonly PbxTreeNode[], dataTransfer: vscode.DataTransfer): void {
     const payload: DragPayloadItem[] = source
-      .filter((n): n is PbxTreeNode & { uuid: string } => "uuid" in n)
+      .filter((n): n is Extract<PbxTreeNode, { kind: "group" | "file" }> => n.kind === "group" || n.kind === "file")
       .map((n) => ({ uuid: n.uuid, project: n.project.pbxprojUri.toString() }));
     if (payload.length > 0) {
       dataTransfer.set(TREE_MIME, new vscode.DataTransferItem(payload));
@@ -35,7 +35,8 @@ export class PbxDragAndDropController implements vscode.TreeDragAndDropControlle
   }
 
   async handleDrop(target: PbxTreeNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
-    if (!target) {
+    // Only .pbxproj nodes accept drops; workspace-level nodes do not (yet).
+    if (!target || (target.kind !== "project" && target.kind !== "group" && target.kind !== "file")) {
       return;
     }
     const projectUri = target.project.pbxprojUri;

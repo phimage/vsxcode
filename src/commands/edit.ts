@@ -14,7 +14,7 @@ export interface EditDeps {
 
 type EditableNode = ProjectTreeNode | GroupTreeNode | FileTreeNode;
 
-function projectUriOf(node: PbxTreeNode): vscode.Uri {
+function projectUriOf(node: EditableNode): vscode.Uri {
   return node.project.pbxprojUri;
 }
 

@@ -1,8 +1,9 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
 import { PbxObject } from "../model/types";
-import { LoadedProject, ProjectManager } from "../workspace/discovery";
-import { FileTreeNode, GroupTreeNode, PbxTreeNode } from "./nodes";
+import { XcWorkspaceItem, wsItemDisplayName } from "../xcworkspace/workspaceData";
+import { LoadedProject, LoadedWorkspace, ProjectManager } from "../workspace/discovery";
+import { FileTreeNode, GroupTreeNode, PbxTreeNode, WsFileRefTreeNode, WsGroupTreeNode } from "./nodes";
 
 export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode> {
   private readonly emitter = new vscode.EventEmitter<PbxTreeNode | undefined>();
@@ -16,8 +17,14 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
 
   getTreeItem(node: PbxTreeNode): vscode.TreeItem {
     switch (node.kind) {
+      case "workspace":
+        return this.workspaceItem(node.workspace);
+      case "wsGroup":
+        return this.wsGroupItem(node);
+      case "wsFileRef":
+        return this.wsFileRefItem(node);
       case "project":
-        return this.projectItem(node.project);
+        return this.projectItem(node.project, node.wsRef !== undefined);
       case "group":
         return this.groupItem(node.project, node.uuid);
       case "file":
@@ -32,13 +39,34 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
 
   getChildren(element?: PbxTreeNode): PbxTreeNode[] {
     if (!element) {
-      return this.manager.getProjects().map((project) => ({ kind: "project", project }));
+      // Workspaces are roots; projects they reference nest below them. Only
+      // projects not owned by any workspace stay at the top level.
+      const roots: PbxTreeNode[] = this.manager
+        .getWorkspaces()
+        .map((workspace) => ({ kind: "workspace", workspace }));
+      for (const project of this.manager.getProjects()) {
+        if (!this.manager.isWorkspaceProject(project)) {
+          roots.push({ kind: "project", project });
+        }
+      }
+      return roots;
     }
     switch (element.kind) {
+      case "workspace": {
+        const { workspace } = element;
+        if (workspace.error) {
+          return [{ kind: "message", message: workspace.error }];
+        }
+        return this.wsChildNodes(workspace, workspace.data.items);
+      }
+      case "wsGroup": {
+        const item = element.workspace.data.get(element.itemId);
+        return item?.kind === "group" ? this.wsChildNodes(element.workspace, item.children) : [];
+      }
       case "project": {
         const { project } = element;
         if (project.error) {
-          return [{ kind: "message", project, message: project.error }];
+          return [{ kind: "message", message: project.error }];
         }
         const main = project.model.mainGroup();
         return main ? this.childNodes(project, main) : [];
@@ -71,7 +99,43 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
         }
       }
     }
+    for (const workspace of this.manager.getWorkspaces()) {
+      for (const ref of workspace.data.allFileRefs()) {
+        const resolved = workspace.data.resolveItem(ref.id, workspace.containerDir);
+        if (resolved !== null && !fs.existsSync(resolved)) {
+          out.push(vscode.Uri.file(resolved));
+        }
+      }
+    }
     return out;
+  }
+
+  private wsChildNodes(workspace: LoadedWorkspace, items: readonly XcWorkspaceItem[]): PbxTreeNode[] {
+    const nodes: PbxTreeNode[] = [];
+    for (const item of items) {
+      if (item.kind === "group") {
+        nodes.push({ kind: "wsGroup", workspace, itemId: item.id } satisfies WsGroupTreeNode);
+        continue;
+      }
+      const resolved = workspace.data.resolveItem(item.id, workspace.containerDir);
+      const project =
+        resolved !== null && resolved.toLowerCase().endsWith(".xcodeproj")
+          ? this.manager.getProjectByXcodeprojPath(resolved)
+          : undefined;
+      if (project) {
+        nodes.push({ kind: "project", project, wsRef: { workspace, itemId: item.id } });
+      } else {
+        const exists = resolved !== null ? fs.existsSync(resolved) : true;
+        nodes.push({
+          kind: "wsFileRef",
+          workspace,
+          itemId: item.id,
+          resolvedPath: resolved,
+          exists
+        } satisfies WsFileRefTreeNode);
+      }
+    }
+    return nodes;
   }
 
   private childNodes(project: LoadedProject, group: PbxObject): PbxTreeNode[] {
@@ -92,9 +156,63 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
     return nodes;
   }
 
-  private projectItem(project: LoadedProject): vscode.TreeItem {
-    const item = new vscode.TreeItem(project.name, vscode.TreeItemCollapsibleState.Expanded);
-    item.contextValue = "pbxProject";
+  private workspaceItem(workspace: LoadedWorkspace): vscode.TreeItem {
+    const item = new vscode.TreeItem(workspace.name, vscode.TreeItemCollapsibleState.Expanded);
+    item.contextValue = "xcWorkspace";
+    item.iconPath = new vscode.ThemeIcon("layers");
+    item.description = workspace.error ? "error" : "Xcode Workspace";
+    item.resourceUri = workspace.dataUri;
+    item.tooltip = workspace.bundlePath;
+    return item;
+  }
+
+  private wsGroupItem(node: WsGroupTreeNode): vscode.TreeItem {
+    const wsItem = node.workspace.data.get(node.itemId);
+    const label = wsItem ? wsItemDisplayName(wsItem) : node.itemId;
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
+    item.contextValue = "wsGroup";
+    const resolved = node.workspace.data.resolveItem(node.itemId, node.workspace.containerDir);
+    if (resolved !== null && fs.existsSync(resolved)) {
+      item.iconPath = new vscode.ThemeIcon("folder");
+      item.resourceUri = vscode.Uri.file(resolved);
+    } else {
+      item.iconPath = new vscode.ThemeIcon("folder-library");
+      item.description = "group";
+    }
+    return item;
+  }
+
+  private wsFileRefItem(node: WsFileRefTreeNode): vscode.TreeItem {
+    const wsItem = node.workspace.data.get(node.itemId);
+    const label = wsItem ? wsItemDisplayName(wsItem) : node.itemId;
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    item.contextValue = "wsFileRef";
+    if (node.resolvedPath) {
+      item.resourceUri = vscode.Uri.file(node.resolvedPath);
+      item.tooltip = node.resolvedPath;
+    } else if (wsItem) {
+      item.tooltip = wsItem.location;
+    }
+    if (!node.exists && node.resolvedPath) {
+      item.iconPath = new vscode.ThemeIcon("warning", new vscode.ThemeColor("list.warningForeground"));
+      item.description = "missing";
+    }
+    if (node.resolvedPath && node.exists && fs.statSync(node.resolvedPath).isFile()) {
+      item.command = {
+        command: "pbx.openFile",
+        title: "Open",
+        arguments: [node]
+      };
+    }
+    return item;
+  }
+
+  private projectItem(project: LoadedProject, inWorkspace: boolean): vscode.TreeItem {
+    const item = new vscode.TreeItem(
+      project.name,
+      inWorkspace ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded
+    );
+    item.contextValue = inWorkspace ? "pbxProjectInWorkspace" : "pbxProject";
     item.iconPath = new vscode.ThemeIcon("project");
     item.description = project.error ? "error" : "Xcode Project";
     item.resourceUri = project.pbxprojUri;

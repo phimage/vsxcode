@@ -4,12 +4,22 @@ import * as vscode from "vscode";
 import { EditDeps } from "../commands/edit";
 import { BuildConfigurationInfo, ProjectEditor, SOURCE_TREES } from "../edit/projectEditor";
 import { PbxTreeNode } from "../tree/nodes";
+import {
+  splitLocation,
+  WS_LOCATION_PREFIXES,
+  wsItemDisplayName,
+  XcWorkspaceData
+} from "../xcworkspace/workspaceData";
 
 /** What the inspector is currently pointed at (survives tree refreshes). */
 interface InspectedNode {
-  projectUri: vscode.Uri;
-  kind: "project" | "group" | "file";
+  /** `.pbxproj` URI for project nodes; `contents.xcworkspacedata` URI for workspace nodes. */
+  documentUri: vscode.Uri;
+  kind: "project" | "group" | "file" | "workspace" | "wsGroup" | "wsFileRef";
+  /** pbx object uuid, or workspace item id. */
   uuid?: string;
+  /** Directory containing the `.xcworkspace` bundle (workspace kinds only). */
+  containerDir?: string;
 }
 
 type WebviewMessage =
@@ -21,7 +31,9 @@ type WebviewMessage =
   | { type: "setAttribute"; key: string; value: string }
   | { type: "setKnownRegions"; value: string }
   | { type: "setBuildSetting"; configUuid: string; key: string; value: string }
-  | { type: "removeBuildSetting"; configUuid: string; key: string };
+  | { type: "removeBuildSetting"; configUuid: string; key: string }
+  | { type: "wsSetName"; value: string }
+  | { type: "wsSetLocation"; prefix: string; path: string };
 
 /** Keys editable as plain strings directly on the PBXProject object. */
 const PROJECT_STRING_KEYS = new Set(["developmentRegion", "compatibilityVersion", "projectDirPath"]);
@@ -55,9 +67,16 @@ export class PbxInspectorViewProvider implements vscode.WebviewViewProvider {
   setNode(node: PbxTreeNode | undefined): void {
     if (!node || node.kind === "message") {
       this.current = undefined;
+    } else if (node.kind === "workspace" || node.kind === "wsGroup" || node.kind === "wsFileRef") {
+      this.current = {
+        documentUri: node.workspace.dataUri,
+        kind: node.kind,
+        uuid: "itemId" in node ? node.itemId : undefined,
+        containerDir: node.workspace.containerDir
+      };
     } else {
       this.current = {
-        projectUri: node.project.pbxprojUri,
+        documentUri: node.project.pbxprojUri,
         kind: node.kind,
         uuid: "uuid" in node ? node.uuid : undefined
       };
@@ -75,8 +94,12 @@ export class PbxInspectorViewProvider implements vscode.WebviewViewProvider {
     if (!current) {
       return;
     }
+    if (current.kind === "workspace" || current.kind === "wsGroup" || current.kind === "wsFileRef") {
+      await this.handleWorkspaceMessage(current, msg);
+      return;
+    }
     try {
-      const editor = ProjectEditor.load(current.projectUri.fsPath);
+      const editor = ProjectEditor.load(current.documentUri.fsPath);
       let changed = false;
       switch (msg.type) {
         case "rename":
@@ -123,7 +146,32 @@ export class PbxInspectorViewProvider implements vscode.WebviewViewProvider {
           break;
       }
       if (changed) {
-        await this.deps.saveText(current.projectUri, editor.serialize());
+        await this.deps.saveText(current.documentUri, editor.serialize());
+        await this.deps.refresh();
+      }
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Inspector edit failed: ${(err as Error).message}`);
+    }
+    this.render();
+  }
+
+  /** Applies an edit to a `contents.xcworkspacedata` document. */
+  private async handleWorkspaceMessage(current: InspectedNode, msg: WebviewMessage): Promise<void> {
+    try {
+      const data = XcWorkspaceData.parse(fs.readFileSync(current.documentUri.fsPath, "utf8"));
+      let changed = false;
+      switch (msg.type) {
+        case "wsSetName":
+          changed = current.uuid ? data.setName(current.uuid, msg.value) : false;
+          break;
+        case "wsSetLocation":
+          changed = current.uuid
+            ? data.setLocation(current.uuid, `${msg.prefix}:${msg.path}`)
+            : false;
+          break;
+      }
+      if (changed) {
+        await this.deps.saveText(current.documentUri, data.serialize());
         await this.deps.refresh();
       }
     } catch (err) {
@@ -219,6 +267,13 @@ ${body}
       case "setAttribute": post({ type: "setAttribute", key: d.key, value: el.value }); break;
       case "setKnownRegions": post({ type: "setKnownRegions", value: el.value }); break;
       case "setBuildSetting": post({ type: "setBuildSetting", configUuid: d.config, key: d.key, value: el.value }); break;
+      case "wsSetName": post({ type: "wsSetName", value: el.value }); break;
+      case "wsSetLocation": {
+        const prefix = document.getElementById("wsLocPrefix");
+        const path = document.getElementById("wsLocPath");
+        if (prefix && path) { post({ type: "wsSetLocation", prefix: prefix.value, path: path.value }); }
+        break;
+      }
     }
   });
   document.addEventListener("click", (e) => {
@@ -247,7 +302,14 @@ ${body}
         body: `<p class="empty">Select a file, group or project in the Project Navigator to inspect it.</p>`
       };
     }
-    const editor = ProjectEditor.load(this.current.projectUri.fsPath);
+    if (
+      this.current.kind === "workspace" ||
+      this.current.kind === "wsGroup" ||
+      this.current.kind === "wsFileRef"
+    ) {
+      return this.renderWorkspaceNode(this.current);
+    }
+    const editor = ProjectEditor.load(this.current.documentUri.fsPath);
     if (this.current.kind === "project") {
       return { title: "Project", body: this.renderProject(editor) };
     }
@@ -328,6 +390,60 @@ ${attrRow("Class Prefix", "CLASSPREFIX")}
     return body;
   }
 
+  /** Inspector panels for workspace, workspace group and file-reference nodes. */
+  private renderWorkspaceNode(current: InspectedNode): { title: string; body: string } {
+    const data = XcWorkspaceData.parse(fs.readFileSync(current.documentUri.fsPath, "utf8"));
+    const containerDir = current.containerDir ?? "";
+
+    if (current.kind === "workspace") {
+      const refs = data.allFileRefs();
+      const projects = refs.filter((r) => {
+        const p = data.resolveItem(r.id, containerDir);
+        return p !== null && p.toLowerCase().endsWith(".xcodeproj");
+      });
+      let body = `
+<h3>Workspace Document</h3>
+<div class="row"><label>Version</label><input type="text" class="readonly" readonly value="${esc(data.version)}"></div>
+<div class="row"><label>Path</label><input type="text" class="readonly" readonly value="${esc(current.documentUri.fsPath)}"></div>
+<h3>Contents</h3>
+<div class="row"><label>Projects</label><input type="text" class="readonly" readonly value="${projects.length}"></div>
+<div class="row"><label>File Refs</label><input type="text" class="readonly" readonly value="${refs.length - projects.length}"></div>`;
+      for (const ref of projects) {
+        const resolved = data.resolveItem(ref.id, containerDir);
+        body += `\n<div class="path-resolved">${esc(resolved ?? ref.location)}</div>`;
+      }
+      return { title: "Workspace", body };
+    }
+
+    const item = current.uuid ? data.get(current.uuid) : undefined;
+    if (!item) {
+      return { title: "Inspector", body: `<p class="empty">The selected item no longer exists in the workspace.</p>` };
+    }
+    const name = wsItemDisplayName(item);
+    const { prefix, path: refPath } = splitLocation(item.location);
+    const prefixes: string[] = [...WS_LOCATION_PREFIXES];
+    if (!prefixes.includes(prefix)) {
+      prefixes.unshift(prefix);
+    }
+    const prefixOptions = prefixes
+      .map((p) => `<option value="${esc(p)}"${p === prefix ? " selected" : ""}>${esc(wsPrefixLabel(p))}</option>`)
+      .join("");
+    const resolved = data.resolveItem(item.id, containerDir);
+
+    let body = `\n<h3>Identity</h3>`;
+    if (item.kind === "group") {
+      body += `\n<div class="row"><label>Name</label><input type="text" data-msg="wsSetName" value="${esc(item.name ?? "")}" placeholder="${esc(name)}"></div>`;
+    } else {
+      body += `\n<div class="row"><label>Name</label><input type="text" class="readonly" readonly value="${esc(name)}"></div>`;
+    }
+    body += `
+<h3>Location</h3>
+<div class="row"><label>Location</label><select id="wsLocPrefix" data-msg="wsSetLocation">${prefixOptions}</select></div>
+<div class="row"><label>Path</label><input type="text" id="wsLocPath" data-msg="wsSetLocation" value="${esc(refPath)}"></div>
+<div class="path-resolved">${resolved ? esc(resolved) : "not resolvable on the filesystem"}</div>`;
+    return { title: name, body };
+  }
+
   private renderConfiguration(config: BuildConfigurationInfo): string {
     let rows = "";
     for (const setting of config.settings) {
@@ -352,6 +468,23 @@ ${attrRow("Class Prefix", "CLASSPREFIX")}
   <button data-action="addSetting" data-config="${esc(config.uuid)}">Add</button>
 </div>
 </details>`;
+  }
+}
+
+function wsPrefixLabel(prefix: string): string {
+  switch (prefix) {
+    case "group":
+      return "Relative to Group";
+    case "container":
+      return "Relative to Workspace";
+    case "absolute":
+      return "Absolute Path";
+    case "developer":
+      return "Relative to Developer Directory";
+    case "self":
+      return "Relative to Workspace Bundle";
+    default:
+      return prefix;
   }
 }
 

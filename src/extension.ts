@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
 import { registerEditCommands } from "./commands/edit";
+import { registerWorkspaceEditCommands } from "./commands/workspaceEdit";
 import { PbxDecorationProvider } from "./decorations/decorations";
 import { toVscodeDiagnostics } from "./diagnostics/diagnostics";
 import { lint } from "./linter/linter";
@@ -8,7 +9,14 @@ import { PbxInspectorViewProvider } from "./inspector/inspectorView";
 import { PbxDocumentSymbolProvider } from "./providers/documentSymbols";
 import { PbxDragAndDropController } from "./tree/dnd";
 import { ProjectTreeProvider } from "./tree/projectTreeProvider";
-import { FileTreeNode, GroupTreeNode, PbxTreeNode, ProjectTreeNode } from "./tree/nodes";
+import {
+  FileTreeNode,
+  GroupTreeNode,
+  PbxTreeNode,
+  ProjectTreeNode,
+  WsFileRefTreeNode,
+  WsGroupTreeNode
+} from "./tree/nodes";
 import { ProjectManager } from "./workspace/discovery";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -77,6 +85,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
   });
 
+  registerWorkspaceEditCommands(context, {
+    saveText,
+    refresh: async () => {
+      await refreshAll();
+    }
+  });
+
   const refreshAll = async (): Promise<{ errors: number; warnings: number }> => {
     await manager.reload();
     treeProvider.refresh();
@@ -118,7 +133,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
 
-    vscode.commands.registerCommand("pbx.openFile", async (node?: FileTreeNode) => {
+    vscode.commands.registerCommand("pbx.openFile", async (node?: FileTreeNode | WsFileRefTreeNode) => {
       if (!node?.resolvedPath) {
         return;
       }
@@ -130,31 +145,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     ...["pbx.revealInOS", "pbx.revealInOSWindows", "pbx.revealInOSLinux"].map((command) =>
-      vscode.commands.registerCommand(command, async (node?: FileTreeNode | GroupTreeNode) => {
-        if (!node) {
-          return;
-        }
-        const resolved =
-          node.kind === "file" ? node.resolvedPath : node.project.resolver.resolve(node.uuid);
+      vscode.commands.registerCommand(command, async (node?: RevealableNode) => {
+        const resolved = resolveForReveal(node);
         if (resolved) {
           await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(resolved));
         }
       })
     ),
 
-    vscode.commands.registerCommand(
-      "pbx.revealInExplorer",
-      async (node?: FileTreeNode | GroupTreeNode) => {
-        if (!node) {
-          return;
-        }
-        const resolved =
-          node.kind === "file" ? node.resolvedPath : node.project.resolver.resolve(node.uuid);
-        if (resolved) {
-          await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(resolved));
-        }
+    vscode.commands.registerCommand("pbx.revealInExplorer", async (node?: RevealableNode) => {
+      const resolved = resolveForReveal(node);
+      if (resolved) {
+        await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(resolved));
       }
-    ),
+    }),
 
     vscode.commands.registerCommand("pbx.openProjectFile", async (node?: ProjectTreeNode) => {
       if (node?.project) {
@@ -163,15 +167,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
-  // Re-parse + re-lint whenever a project file changes on disk or is saved.
+  // Re-parse + re-lint whenever a project/workspace file changes on disk or is saved.
   const watcher = vscode.workspace.createFileSystemWatcher("**/*.xcodeproj/project.pbxproj");
+  const wsWatcher = vscode.workspace.createFileSystemWatcher("**/*.xcworkspace/contents.xcworkspacedata");
   context.subscriptions.push(
     watcher,
+    wsWatcher,
     watcher.onDidChange(() => void refreshAll()),
     watcher.onDidCreate(() => void refreshAll()),
     watcher.onDidDelete(() => void refreshAll()),
+    wsWatcher.onDidChange(() => void refreshAll()),
+    wsWatcher.onDidCreate(() => void refreshAll()),
+    wsWatcher.onDidDelete(() => void refreshAll()),
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.languageId === "pbxproj") {
+      if (doc.languageId === "pbxproj" || doc.fileName.endsWith(".xcworkspacedata")) {
         void refreshAll();
       }
     }),
@@ -187,4 +196,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
   // Disposables are handled via context.subscriptions.
+}
+
+type RevealableNode = FileTreeNode | GroupTreeNode | WsFileRefTreeNode | WsGroupTreeNode;
+
+/** Filesystem path a reveal command should target, for both pbx and workspace nodes. */
+function resolveForReveal(node: RevealableNode | undefined): string | null {
+  switch (node?.kind) {
+    case "file":
+      return node.resolvedPath;
+    case "group":
+      return node.project.resolver.resolve(node.uuid);
+    case "wsFileRef":
+      return node.resolvedPath;
+    case "wsGroup":
+      return node.workspace.data.resolveItem(node.itemId, node.workspace.containerDir);
+    default:
+      return null;
+  }
 }

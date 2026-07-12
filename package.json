@@ -2,7 +2,7 @@
   "name": "vsxcode",
   "displayName": "Xcode Project Editor",
   "description": "Inspect, edit, validate and maintain Xcode .pbxproj projects on Windows, Linux and macOS.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vsxcode",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -32,7 +32,8 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:pbxproj",
-    "workspaceContains:**/*.xcodeproj/project.pbxproj"
+    "workspaceContains:**/*.xcodeproj/project.pbxproj",
+    "workspaceContains:**/*.xcworkspace/contents.xcworkspacedata"
   ],
   "contributes": {
     "languages": [
@@ -49,6 +50,12 @@
           "project.pbxproj"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "xml",
+        "extensions": [
+          ".xcworkspacedata"
+        ]
       }
     ],
     "grammars": [
@@ -148,7 +155,7 @@
     "viewsWelcome": [
       {
         "view": "xcodeProjectExplorer",
-        "contents": "No Xcode project found in this workspace.\nOpen a folder that contains an .xcodeproj bundle to browse it here.\n[Refresh](command:pbx.refresh)"
+        "contents": "No Xcode project or workspace found in this folder.\nOpen a folder that contains an .xcodeproj or .xcworkspace bundle to browse it here.\n[Refresh](command:pbx.refresh)"
       }
     ],
     "commands": [
@@ -228,6 +235,34 @@
         "title": "Remove from Project…",
         "category": "PBX",
         "icon": "$(trash)"
+      },
+      {
+        "command": "pbx.openWorkspaceFile",
+        "title": "Open contents.xcworkspacedata",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.wsNewGroup",
+        "title": "New Group",
+        "category": "PBX",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "pbx.wsAddFiles",
+        "title": "Add Files to Workspace…",
+        "category": "PBX",
+        "icon": "$(add)"
+      },
+      {
+        "command": "pbx.wsRename",
+        "title": "Rename…",
+        "category": "PBX"
+      },
+      {
+        "command": "pbx.wsRemove",
+        "title": "Remove from Workspace…",
+        "category": "PBX",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -251,33 +286,58 @@
         },
         {
           "command": "pbx.revealInOS",
-          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/ && isMac",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup|wsFileRef|wsGroup)$/ && isMac",
           "group": "navigation@2"
         },
         {
           "command": "pbx.revealInOSWindows",
-          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/ && isWindows",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup|wsFileRef|wsGroup)$/ && isWindows",
           "group": "navigation@2"
         },
         {
           "command": "pbx.revealInOSLinux",
-          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/ && isLinux",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup|wsFileRef|wsGroup)$/ && isLinux",
           "group": "navigation@2"
         },
         {
           "command": "pbx.revealInExplorer",
-          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup)$/",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|pbxGroup|wsFileRef|wsGroup)$/",
           "group": "navigation@3"
         },
         {
           "command": "pbx.showInspector",
-          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup|pbxProject/",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /pbxFile|pbxGroup|pbxProject|xcWorkspace|wsFileRef|wsGroup/",
           "group": "navigation@4"
         },
         {
           "command": "pbx.openProjectFile",
-          "when": "view == xcodeProjectExplorer && viewItem == pbxProject",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^pbxProject(InWorkspace)?$/",
           "group": "navigation@1"
+        },
+        {
+          "command": "pbx.openWorkspaceFile",
+          "when": "view == xcodeProjectExplorer && viewItem == xcWorkspace",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pbx.wsNewGroup",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(xcWorkspace|wsGroup)$/",
+          "group": "1_new@1"
+        },
+        {
+          "command": "pbx.wsAddFiles",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(xcWorkspace|wsGroup)$/",
+          "group": "1_new@2"
+        },
+        {
+          "command": "pbx.wsRename",
+          "when": "view == xcodeProjectExplorer && viewItem == wsGroup",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "pbx.wsRemove",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(wsGroup|wsFileRef|pbxProjectInWorkspace)$/",
+          "group": "2_edit@2"
         },
         {
           "command": "pbx.newGroup",
@@ -306,7 +366,7 @@
         },
         {
           "command": "pbx.validateProject",
-          "when": "view == xcodeProjectExplorer && viewItem == pbxProject",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^pbxProject(InWorkspace)?$/",
           "group": "navigation@3"
         }
       ]
