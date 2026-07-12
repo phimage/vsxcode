@@ -20,6 +20,7 @@ Inspect, browse and validate Xcode `.pbxproj` projects directly inside VS Code �
 - **File operations** — create groups, add existing files, create new files (with target membership), rename, and remove (reference only or move-to-trash) — all writing clean, Xcode-style pbxproj.
 - **Drag & drop** — reorder/reparent references inside the tree (move), or drop files from the Explorer / desktop to add references.
 - **Linter + diagnostics** surfaced in the Problems panel, with orange warning tree decorations for files that are referenced by the project but missing on disk.
+- **Asset catalogs** — clicking an `.xcassets` reference opens it in the [Asset Catalog Viewer](https://marketplace.visualstudio.com/items?itemName=artemnovichkov.asset-catalog-viewer) extension when installed (silent no-op otherwise); *Open in Asset Catalog Viewer* in the context menu offers to install it. Other folder references (`.bundle`, …) no longer error on click.
 
 ## Screenshots
 
@@ -51,7 +52,8 @@ Launch the extension (see [Development](#development)) against the bundled `test
 | --- | --- |
 | `PBX: Refresh` | Re-scan the workspace, re-parse and re-lint. |
 | `PBX: Validate Project` | Run the linter and report a summary. |
-| `PBX: Open` | Open the selected file reference. |
+| `PBX: Open` | Open the selected file reference (asset catalogs open in the viewer extension). |
+| `PBX: Open in Asset Catalog Viewer` | Open an `.xcassets` folder in the Asset Catalog Viewer extension (offers install if missing). |
 | `PBX: Reveal in File Explorer` | Reveal the file/group on disk (OS Finder/File Explorer). |
 | `PBX: Reveal in Explorer View` | Reveal the file/group in VS Code's built-in Explorer view. |
 | `PBX: Open project.pbxproj` | Open the raw project file. |

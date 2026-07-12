@@ -2,7 +2,7 @@
   "name": "vsxcode",
   "displayName": "Xcode Project Editor",
   "description": "Inspect, edit, validate and maintain Xcode .pbxproj projects on Windows, Linux and macOS.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "vsxcode",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -237,6 +237,11 @@
         "icon": "$(trash)"
       },
       {
+        "command": "pbx.openAssetCatalog",
+        "title": "Open in Asset Catalog Viewer",
+        "category": "PBX"
+      },
+      {
         "command": "pbx.openWorkspaceFile",
         "title": "Open contents.xcworkspacedata",
         "category": "PBX"
@@ -282,6 +287,11 @@
         {
           "command": "pbx.openFile",
           "when": "view == xcodeProjectExplorer && viewItem == pbxFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pbx.openAssetCatalog",
+          "when": "view == xcodeProjectExplorer && viewItem =~ /^(pbxFile|wsFileRef)$/ && resourceFilename =~ /\\.xcassets$/i",
           "group": "navigation@1"
         },
         {

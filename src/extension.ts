@@ -141,8 +141,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void vscode.window.showWarningMessage(`File is missing on disk: ${node.resolvedPath}`);
         return;
       }
+      if (fs.statSync(node.resolvedPath).isDirectory()) {
+        // Folder references (.xcassets, .bundle, …) cannot open in a text
+        // editor. Asset catalogs open via the Asset Catalog Viewer extension
+        // when it is installed; otherwise clicking is a silent no-op.
+        if (isAssetCatalogPath(node.resolvedPath)) {
+          await openAssetCatalog(node.resolvedPath, { promptInstall: false });
+        }
+        return;
+      }
       await vscode.window.showTextDocument(vscode.Uri.file(node.resolvedPath), { preview: true });
     }),
+
+    vscode.commands.registerCommand(
+      "pbx.openAssetCatalog",
+      async (node?: FileTreeNode | WsFileRefTreeNode) => {
+        if (node?.resolvedPath && fs.existsSync(node.resolvedPath)) {
+          await openAssetCatalog(node.resolvedPath, { promptInstall: true });
+        }
+      }
+    ),
 
     ...["pbx.revealInOS", "pbx.revealInOSWindows", "pbx.revealInOSLinux"].map((command) =>
       vscode.commands.registerCommand(command, async (node?: RevealableNode) => {
@@ -196,6 +214,44 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
   // Disposables are handled via context.subscriptions.
+}
+
+/** Third-party extension that renders `.xcassets` like Xcode does. */
+const ASSET_CATALOG_EXTENSION_ID = "artemnovichkov.asset-catalog-viewer";
+const ASSET_CATALOG_OPEN_COMMAND = "xcassetsViewer.openViewer";
+
+function isAssetCatalogPath(fsPath: string): boolean {
+  return /\.xcassets$/i.test(fsPath);
+}
+
+/**
+ * Opens an asset catalog in the Asset Catalog Viewer extension when installed.
+ * Without it: a no-op when triggered by a tree click (`promptInstall: false`),
+ * or an install suggestion when invoked explicitly from the context menu.
+ */
+async function openAssetCatalog(fsPath: string, opts: { promptInstall: boolean }): Promise<void> {
+  const uri = vscode.Uri.file(fsPath);
+  if (vscode.extensions.getExtension(ASSET_CATALOG_EXTENSION_ID)) {
+    await vscode.commands.executeCommand(ASSET_CATALOG_OPEN_COMMAND, uri);
+    return;
+  }
+  if (!opts.promptInstall) {
+    return;
+  }
+  const choice = await vscode.window.showInformationMessage(
+    "Viewing asset catalogs requires the Asset Catalog Viewer extension.",
+    "Install",
+    "Show Extension"
+  );
+  if (choice === "Install") {
+    await vscode.commands.executeCommand(
+      "workbench.extensions.installExtension",
+      ASSET_CATALOG_EXTENSION_ID
+    );
+    await vscode.commands.executeCommand(ASSET_CATALOG_OPEN_COMMAND, uri);
+  } else if (choice === "Show Extension") {
+    await vscode.commands.executeCommand("extension.open", ASSET_CATALOG_EXTENSION_ID);
+  }
 }
 
 type RevealableNode = FileTreeNode | GroupTreeNode | WsFileRefTreeNode | WsGroupTreeNode;

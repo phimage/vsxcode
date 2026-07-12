@@ -197,7 +197,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<PbxTreeNode>
       item.iconPath = new vscode.ThemeIcon("warning", new vscode.ThemeColor("list.warningForeground"));
       item.description = "missing";
     }
-    if (node.resolvedPath && node.exists && fs.statSync(node.resolvedPath).isFile()) {
+    if (node.resolvedPath && node.exists) {
+      // pbx.openFile is directory-safe (asset catalogs open in a viewer,
+      // other folders are a no-op).
       item.command = {
         command: "pbx.openFile",
         title: "Open",
